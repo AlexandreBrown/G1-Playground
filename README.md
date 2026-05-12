@@ -183,7 +183,7 @@ Hardware is unforgiving. Read this section in full before plugging anything in.
 ### Safety checklist (non-negotiable for first runs)
 
 1. **Hang the robot from an overhead gantry or strap.** The `AnkleSwingPolicy` ramps to zero pose, which from a standing posture means the robot collapses to a crouch and falls. Standing self-balance is not implemented in this repo.
-2. **Wireless controller E-stop within reach.** Know which button it is before you start.
+2. **Wireless controller and E-stop within reach.** Know which button it is before you start.
 3. **Clear area.** No people, no objects, no cables in reach of the robot.
 4. **Charged battery.** Low battery causes erratic behavior under load.
 5. **Body-only first.** Default to `num_motors=29`. Do not attempt `num_motors=43` (Dex3 hands) until body-only is solid.
@@ -211,8 +211,11 @@ If ping fails, the network isn't set up correctly. Fix that before going further
 ### Robot preparation
 
 1. Power on the G1. It boots through its startup sequence.
-2. On the wireless controller, press **L2 + B** to enter damping mode. Joints lock passively. Robot is safe to handle while hanging.
-3. **Do not** press L2 + UP for locked standing. Stay in damping mode for the first test.
+2. Enter Developer mode : **HOLD L2 + CLICK R2**
+3. Go DAMP : **HOLD L2 + CLICK B** 
+4. Go DEBUG POSE : **HOLD L2 + CLICK A**
+5. Go DAMP : **HOLD L2 + CLICK B**  
+**Do not** press L2 + UP for locked standing. Stay in damping mode for the first test.
 
 ### Run
 
