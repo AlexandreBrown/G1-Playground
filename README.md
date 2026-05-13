@@ -1,8 +1,8 @@
 # G1 Playground
 
-A clean, minimal starting point for learning to control the Unitree G1 humanoid robot. The repo wraps the low-level Unitree SDK behind a small strategy-pattern interface so you can focus on writing policies instead of plumbing DDS topics, motor mode bytes, and threading.
+A clean, minimal starting point for learning to control the Unitree G1 humanoid robot using the Unitree Python SDK. The repo decouples low-level DDS communication and policy execution so you can create new policy classes without worrying about DDS topics, motor mode bytes, or threading for quick testing of your policy in sim and real.
 
-The goal is to give you a fast path from "sim works" to "real robot works" without inheriting the weight of a research codebase.
+Write a policy once, validate it across multiple simulators (MuJoCo, Isaac Lab) and deploy to the real robot with no code changes. All communication goes through DDS, the same protocol the real robot uses, so sim and real share the same code path.
 
 ## What's included
 
