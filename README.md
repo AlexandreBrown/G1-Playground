@@ -259,6 +259,8 @@ cd ../unitree_sim_isaaclab
 python sim_main.py --device cuda --enable_cameras --task Isaac-PickPlace-Cylinder-G129-Dex3-Joint --enable_dex3_dds --robot_type g129
 ```
 
+<img src="resources/isaac_lab_g1_example.png" height="400px"/>
+
 Available G1 tasks:
 
 | Task | Hand type | Flag |
@@ -280,8 +282,6 @@ python scripts/run_ankle_swing_demo.py --dds_channel_id 1
 ```
 
 No `--network_interface` is needed since Isaac Lab communicates via shared memory on the same machine.
-
-<img src="resources/isaac_lab_g1_example.png" height="400px"/>
 
 ### Common Isaac Lab problems
 
