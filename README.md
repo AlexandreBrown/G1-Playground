@@ -10,14 +10,14 @@ The goal is to give you a fast path from "sim works" to "real robot works" witho
 - A `Policy` abstract base class. Subclass it, implement `reset` and `step`, and the robot runs your policy at whatever rate you specify.
 - Body-only mode (29 motors) and body + Dex3 hand mode (43 motors), switched by a single constructor argument.
 - An `AnkleSwingPolicy` example that recreates Unitree's official low-level demo through the new architecture, useful as a sanity check end-to-end.
-- A two-thread design: a policy thread at your chosen rate and a tracker thread at 500Hz. Plug in slow learned policies (10-50Hz) without losing motor command rate.
+- A two-thread design: a policy thread at your chosen rate and a control thread at 500Hz. Plug in slow learned policies (10-50Hz) without losing motor command rate.
 
 ## Repository structure
 
 ```
 G1-Playground/
 ├── scripts/
-│   └── ankle_swing.py              # entry point that runs the demo
+│   └── run_ankle_swing_demo.py              # entry point that runs the demo
 ├── src/g1_playground/
 │   ├── __init__.py
 │   ├── action.py                   # JointAction dataclass + Mode constants
@@ -46,41 +46,32 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ### 2. Clone the project
 
 ```bash
-cd ~
 git clone https://github.com/AlexandreBrown/G1-Playground.git
 cd G1-Playground
 ```
 
 ### 3. Clone and link `unitree_sdk2_python`
 
-The upstream `unitree_sdk2_python` ships precompiled `.so` files that get stripped out when uv builds a wheel from a git source. The fix is an editable install pointing at a local clone:
+The upstream `unitree_sdk2_python` ships precompiled `.so` files that get stripped out when uv builds a wheel from a git source. The fix is an editable install pointing at a local clone next to this repo:
 
 ```bash
-cd ~
-git clone https://github.com/unitreerobotics/unitree_sdk2_python.git
-
-cd ~/G1-Playground
-uv add --editable ~/unitree_sdk2_python
+git clone https://github.com/unitreerobotics/unitree_sdk2_python.git ../unitree_sdk2_python
+uv add --editable ../unitree_sdk2_python
 ```
 
-If you ever hit `Could not locate cyclonedds. Try to set CYCLONEDDS_HOME or CMAKE_PREFIX_PATH` during install, install the dev libs:
-
-```bash
-sudo apt install libcyclonedds-dev
-```
-
-### 4. Install everything else
+### 4. Install everything and activate the environment
 
 ```bash
 uv sync
+source .venv/bin/activate
 ```
 
-This installs `mujoco`, `numpy`, and any other declared dependencies into `.venv/`.
+This installs `mujoco`, `numpy`, and any other declared dependencies into `.venv/`. The `source` command activates the virtual environment so you can use `python` directly instead of `uv run` for the rest of the session.
 
 ### 5. Verify the install
 
 ```bash
-uv run python -c "from g1_playground.robot import UnitreeG1Robot; from g1_playground.policies.ankle_swing import AnkleSwingPolicy; print('ok')"
+python -c "from g1_playground.robot import UnitreeG1Robot; from g1_playground.policies.ankle_swing import AnkleSwingPolicy; print('ok')"
 ```
 
 Should print `ok` with no traceback.
@@ -89,35 +80,25 @@ Should print `ok` with no traceback.
 
 Start in simulation. Always. Real hardware has consequences and the sim catches most bugs.
 
-### 1. Install MuJoCo
+MuJoCo is already installed as a Python dependency (`mujoco` in `pyproject.toml`), so no manual download is needed.
 
-Download the latest MuJoCo release from https://github.com/google-deepmind/mujoco/releases and extract it to `~/.mujoco/`:
+### 1. Clone `unitree_mujoco`
 
-```bash
-mkdir -p ~/.mujoco
-cd ~/.mujoco
-# download mujoco-3.3.x-linux-x86_64.tar.gz from the releases page
-tar -xf mujoco-3.3.x-linux-x86_64.tar.gz
-```
-
-### 2. Clone `unitree_mujoco`
-
-This is Unitree's official MuJoCo simulator. It runs as a separate process and communicates with your control code over DDS, exactly as the real robot does.
+This is Unitree's official MuJoCo simulator. It runs as a separate process and communicates with your control code over DDS, exactly as the real robot does. Clone it next to this repo:
 
 ```bash
-cd ~
-git clone https://github.com/unitreerobotics/unitree_mujoco.git
+git clone https://github.com/unitreerobotics/unitree_mujoco.git ../unitree_mujoco
 ```
 
-### 3. Configure `unitree_mujoco` for G1
+### 2. Configure `unitree_mujoco` for G1
 
-Edit `~/unitree_mujoco/simulate_python/config.py`:
+Edit `../unitree_mujoco/simulate_python/config.py`:
 
 ```python
 import os
 
 ROBOT = "g1"
-ROBOT_SCENE = os.path.expanduser("~/unitree_mujoco/unitree_robots/g1/scene_29dof.xml")
+ROBOT_SCENE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "unitree_robots", "g1", "scene_29dof.xml")
 DOMAIN_ID = 0
 INTERFACE = "lo"
 
@@ -138,32 +119,44 @@ The important settings:
 - `INTERFACE = "lo"` uses loopback so sim and script can talk on the same machine.
 - `ENABLE_ELASTIC_BAND = True` hangs the robot from a virtual strap. The `AnkleSwingPolicy` ramps to zero pose, which is not a stable standing posture, so without the strap the robot collapses.
 
-### 4. Run the simulator
-
+### 3. Run the simulator
 Terminal 1:
 
+Ensure env is activate :  
 ```bash
-cd ~/G1-Playground
-uv run python ~/unitree_mujoco/simulate_python/unitree_mujoco.py
+source .venv/bin/activate
 ```
 
-A MuJoCo viewer window opens with G1 loaded. Click the window once to focus it, then press **9** to engage the elastic band so the robot hangs in the air.
-
-### 5. Run your control script
-
-Terminal 2:
-
+Run the sim :
 ```bash
-cd ~/G1-Playground
-uv run python scripts/ankle_swing.py lo
+python ../unitree_mujoco/simulate_python/unitree_mujoco.py
 ```
 
-Where `lo` is the network interface (loopback for sim). You should see:
+A MuJoCo viewer window opens with G1 loaded.
+
+<img src="resources/mujoco_g1_example.png" height="400px">  
+
+### 4. Run your control script
+
+Terminal 2:  
+
+Ensure env is activate :  
+```bash
+source .venv/bin/activate
+```
+
+Run your code : 
+```bash
+python scripts/run_ankle_swing_demo.py lo
+```
+
+Where `lo` is the network interface (loopback for sim).   
+You should see:
 
 1. Warning message and an Enter prompt.
 2. Press Enter.
-3. Within ~1 second: "Running. Press Ctrl+C to stop."
-4. In the sim window: robot ramps to zero pose (3 seconds), then ankles swing in PR mode (3 seconds), then AB mode with wrist roll.
+3. Within ~1 second the policy will start running on the robot.  
+4. In the sim window: robot ramps to zero pose (first 3 seconds), then ankles swing in PR mode (3 seconds), then AB mode with wrist roll.
 
 Stop with Ctrl+C. The robot's `stop()` releases hands if present and the threads die on process exit.
 
@@ -172,7 +165,6 @@ Stop with Ctrl+C. The robot's `stop()` releases hands if present and the threads
 | Symptom | Cause | Fix |
 |---|---|---|
 | `No LowState received within timeout` | Domain ID or interface mismatch between sim and script | Verify `DOMAIN_ID = 0` and `INTERFACE = "lo"` in `config.py`, and pass `lo` as the script argument |
-| `ValueError: ParseXML: Error opening file '~/...'` | `~` not expanded in the config path string | Use `os.path.expanduser(...)` as shown above |
 | Robot falls immediately and twitches on the ground | `ENABLE_ELASTIC_BAND = False` (no virtual strap) | Set `True`, restart sim, press `9` after it loads |
 | `crc_amd64.so: cannot open shared object file` | `unitree_sdk2py` installed as a non-editable wheel from git, which dropped the precompiled libs | Use editable install from a local clone (see setup step 3) |
 
@@ -180,7 +172,7 @@ Stop with Ctrl+C. The robot's `stop()` releases hands if present and the threads
 
 Hardware is unforgiving. Read this section in full before plugging anything in.
 
-### Safety checklist (non-negotiable for first runs)
+### Safety checklist
 
 1. **Hang the robot from an overhead gantry or strap.** The `AnkleSwingPolicy` ramps to zero pose, which from a standing posture means the robot collapses to a crouch and falls. Standing self-balance is not implemented in this repo.
 2. **Wireless controller and E-stop within reach.** Know which button it is before you start.
@@ -195,10 +187,10 @@ The G1 has an ethernet port for SDK communication. Connect it to your laptop's w
 Find the interface name:
 
 ```bash
-ip a
+ifconfig
 ```
 
-Look for the wired adapter connected to the robot. Common names: `enp2s0`, `enp3s0`, `eth0`. Configure that adapter's IP to be in the same subnet as the robot. The default robot onboard PC IP is `192.168.123.161`.
+Look for the wired adapter connected to the robot. Common names: `enp2s0`, `enp3s0`, `eth0`. Configure that adapter's IP to be in the same subnet as the robot. The default robot onboard PC IP is `192.168.123.161`, this one is private and cannot be ssh-ed into and the dev computer on the robot is `192.168.123.164` (that one we can ssh into).
 
 Verify the connection:
 
@@ -220,8 +212,7 @@ If ping fails, the network isn't set up correctly. Fix that before going further
 ### Run
 
 ```bash
-cd ~/G1-Playground
-uv run python scripts/ankle_swing.py enp2s0
+python scripts/run_ankle_swing_demo.py enp2s0
 ```
 
 Replace `enp2s0` with your actual ethernet interface.
@@ -232,7 +223,7 @@ What you should see:
 2. Press Enter.
 3. `_release_motion_mode` shuts down the onboard sport service. You may hear a small click from the robot or feel it briefly lose stiffness.
 4. State arrives in milliseconds and the wait completes.
-5. The 500Hz tracker starts publishing commands. The robot ramps to zero pose, then ankles swing, etc.
+5. The 500Hz control thread starts publishing commands. The robot ramps to zero pose, then ankles swing, etc.
 
 ### Stop immediately if you see
 
@@ -241,13 +232,13 @@ What you should see:
 - Any joint hitting its mechanical limit → zero pose is outside the safe range for that joint configuration
 - Motors getting hot → don't leave it running long-term with stiff gains
 
-Ctrl+C the script. The robot's `stop()` injects a release action; the threads die when the process exits. Power off via the wireless controller.
+Ctrl+C the script. The robot's `stop()` injects a release action; the threads die when the process exits. Alternatively use an emergency stop if you have one attached to the G1.
 
 ### Tuning notes for hardware
 
 Sim and hardware behave differently in two important ways:
 
-1. **Hardware exposes timing jitter.** The Python control loop at 500Hz is near its CPU budget on a laptop. You may see a tick-tick sound during fast motion that wasn't audible in sim. Drop `control_dt` to `0.004` (250Hz) or run with `sudo chrt -f 80 uv run python ...` for realtime scheduling priority. Either fixes most of it.
+1. **Hardware exposes timing jitter.** The Python control loop at 500Hz is near its CPU budget on a laptop. You may see a tick-tick sound during fast motion that wasn't audible in sim. Drop `control_dt` to `0.004` (250Hz) or run with `sudo chrt -f 80 python ...` for realtime scheduling priority. Either fixes most of it.
 
 2. **The default PD gains are starting points, not tuned values.** `ARMS_Kp = [40] * 7` is uniform across shoulder, elbow, and wrist, but the wrist has much lower inertia and benefits from softer `kp` and higher `kd` to avoid ringing. Override per joint in your policy:
 
@@ -259,15 +250,6 @@ for idx in (G129DofJointIndex.LeftWristRoll, G129DofJointIndex.RightWristRoll):
     kd[idx] = 2.0
 return JointAction(q=q, kp=kp, kd=kd, mode_pr=Mode.AB)
 ```
-
-### Going further
-
-Once `AnkleSwingPolicy` runs cleanly on hardware, the next steps are:
-
-1. **Write a `HoldPosePolicy`** that records initial pose in `reset` and returns it every step. Useful as a baseline before any learned policy.
-2. **Test Dex3 hands incrementally.** Start with a `HoldHandsPolicy` (passive, commands current pose with low gains) before any policy that moves the hands. The mode encoding for the Dex3 `RIS_Mode_t` byte is in `robot.py:_encode_dex3_motor_mode`.
-3. **Plug in a learned policy.** Subclass `Policy`, run inference in `step`, convert torch output to numpy at the boundary (do not run the policy at 500Hz, keep it at 10-50Hz). For smooth tracking at lower policy rates, add target interpolation in the control loop.
-4. **Move from MuJoCo to Isaac Lab** for closer-to-reality contact dynamics. Will be added to this repo later.
 
 ## Architecture notes
 
@@ -281,7 +263,7 @@ A short explanation of why the code is structured the way it is.
 
 **Mode encoding differs between body and Dex3 hands.** Body motors take `mode = 1` for enable. Dex3 motors take a packed `RIS_Mode_t` byte. This is handled in `_apply_hand_actions` and `_encode_dex3_motor_mode`. A subtle bug here is silent on hardware (hands just don't move), so verify carefully when first enabling Dex3.
 
-**Stop is best-effort, not clean.** `RecurrentThread` in `unitree_sdk2py` has no shutdown API. `stop()` injects a release action so the hands go limp, waits 50ms for the tracker to publish it, then returns. The threads die when the process exits via `sys.exit(0)`.
+**Stop is best-effort, not clean.** `RecurrentThread` in `unitree_sdk2py` has no shutdown API. In our `stop()`, we inject a release action so the hands go limp, waits 50ms for the control thread to publish it, then returns. The threads die when the process exits via `sys.exit(0)`.
 
 ## License
 

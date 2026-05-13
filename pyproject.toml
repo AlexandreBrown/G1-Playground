@@ -1,7 +1,7 @@
 [project]
 name = "g1-playground"
 version = "0.1.0"
-description = "Add your description here"
+description = "G1 Playground, a lightweight codebase for gettting started with Unitree's G1 robot."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -19,4 +19,4 @@ build-backend = "hatchling.build"
 packages = ["src/g1_playground"]
 
 [tool.uv.sources]
-unitree-sdk2py = { path = "../../../unitree_sdk2_python", editable = true }
+unitree-sdk2py = { path = "../unitree_sdk2_python", editable = true }
