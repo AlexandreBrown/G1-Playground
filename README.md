@@ -99,7 +99,7 @@ import os
 
 ROBOT = "g1"
 ROBOT_SCENE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "unitree_robots", "g1", "scene_29dof.xml")
-DOMAIN_ID = 0
+DOMAIN_ID = 1
 INTERFACE = "lo"
 
 USE_JOYSTICK = 0
@@ -115,7 +115,7 @@ VIEWER_DT = 0.02
 
 The important settings:
 
-- `DOMAIN_ID = 0` matches the script's DDS domain. If they differ, the two processes can't see each other and you'll get `No LowState received within timeout`.
+- `DOMAIN_ID = 1` matches the script's default DDS channel ID. We use 1 for simulation so that running a script without explicit flags never accidentally sends commands to a real robot (which uses channel 0). If they differ, the two processes can't see each other and you'll get `No LowState received within timeout`.
 - `INTERFACE = "lo"` uses loopback so sim and script can talk on the same machine.
 - `ENABLE_ELASTIC_BAND = True` hangs the robot from a virtual strap. The `AnkleSwingPolicy` ramps to zero pose, which is not a stable standing posture, so without the strap the robot collapses.
 
@@ -147,10 +147,10 @@ source .venv/bin/activate
 
 Run your code : 
 ```bash
-python scripts/run_ankle_swing_demo.py lo
+python scripts/run_ankle_swing_demo.py lo --dds_channel_id 1
 ```
 
-Where `lo` is the network interface (loopback for sim).   
+Where `lo` is the network interface (loopback for sim) and `--dds_channel_id 1` is the sim channel.   
 You should see:
 
 1. Warning message and an Enter prompt.
@@ -164,9 +164,135 @@ Stop with Ctrl+C. The robot's `stop()` releases hands if present and the threads
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `No LowState received within timeout` | Domain ID or interface mismatch between sim and script | Verify `DOMAIN_ID = 0` and `INTERFACE = "lo"` in `config.py`, and pass `lo` as the script argument |
+| `No LowState received within timeout` | Domain ID or interface mismatch between sim and script | Verify `DOMAIN_ID = 1` and `INTERFACE = "lo"` in `config.py`, and pass `lo` as the script argument |
 | Robot falls immediately and twitches on the ground | `ENABLE_ELASTIC_BAND = False` (no virtual strap) | Set `True`, restart sim, press `9` after it loads |
 | `crc_amd64.so: cannot open shared object file` | `unitree_sdk2py` installed as a non-editable wheel from git, which dropped the precompiled libs | Use editable install from a local clone (see setup step 3) |
+
+## Simulation setup (Isaac Lab)
+
+Like `unitree_mujoco`, the `unitree_sim_isaaclab` simulator runs as a separate process and communicates with your control code over DDS, so the existing scripts work without modification.
+
+**Requires an NVIDIA GPU** with recent drivers. If you don't have one, stick with the MuJoCo setup above.
+
+### 1. Install Isaac Sim 5.1.0
+
+Create a virtual environment with Python 3.11 and install Isaac Sim:
+
+```bash
+cd ../
+uv venv unitree_sim_env --python 3.11
+source unitree_sim_env/bin/activate
+
+uv pip install torch==2.7.0 torchvision==0.22.0 torchaudio==2.7.0 --index-url https://download.pytorch.org/whl/cu126
+uv pip install "isaacsim[all,extscache]==5.1.0" --extra-index-url https://pypi.nvidia.com
+```
+
+Verify by running `isaacsim` (first run will ask you to accept the EULA).
+
+### 2. Install Isaac Lab
+
+```bash
+git clone https://github.com/isaac-sim/IsaacLab.git ./IsaacLab
+sudo apt install cmake build-essential
+cd ../IsaacLab
+./isaaclab.sh --install
+cd ../G1-Playground
+```
+
+Verify:
+
+```bash
+python ../IsaacLab/scripts/tutorials/00_sim/create_empty.py
+```
+
+It's gonna take a little while but you should end up seeing "[INFO]: Setup complete..." in the terminal.
+
+### 3. Clone and set up `unitree_sim_isaaclab`
+
+```bash
+git clone https://github.com/unitreerobotics/unitree_sim_isaaclab.git ../unitree_sim_isaaclab
+cd ../unitree_sim_isaaclab
+git submodule update --init --depth 1
+```
+
+Build CycloneDDS from source (needed for the `unitree_sdk2_python` install):
+
+```bash
+git clone https://github.com/eclipse-cyclonedds/cyclonedds -b releases/0.10.x ../cyclonedds
+cd ../cyclonedds && mkdir build install && cd build
+cmake .. -DCMAKE_INSTALL_PREFIX=../install
+cmake --build . --target install
+cd ../../unitree_sim_isaaclab
+```
+
+Install its dependencies:
+
+```bash
+export CYCLONEDDS_HOME=$(realpath ../cyclonedds/install)
+uv pip install wheel
+CYCLONEDDS_HOME=$CYCLONEDDS_HOME uv pip install --no-build-isolation -e ../unitree_sdk2_python
+uv pip install -e ./teleimager
+uv pip install -r requirements.txt
+```
+
+Fetch the robot assets (requires `git-lfs`):
+
+```bash
+bash fetch_assets.sh
+```
+
+This downloads USDA/URDF models from HuggingFace and places them in `../assets/`.
+
+Return to the project directory:
+
+```bash
+cd ../G1-Playground
+```
+
+### 4. Run the simulator
+
+Both `unitree_sim_isaaclab` and `unitree_mujoco` use DDS channel **1**, which matches the script's default `--dds_channel_id`.
+
+Terminal 1 (with the `unitree_sim_env` venv active):
+
+```bash
+source ../unitree_sim_env/bin/activate
+cd ../unitree_sim_isaaclab
+python sim_main.py --device cuda --enable_cameras --task Isaac-PickPlace-Cylinder-G129-Dex3-Joint --enable_dex3_dds --robot_type g129
+```
+
+Available G1 tasks:
+
+| Task | Hand type | Flag |
+|---|---|---|
+| `Isaac-PickPlace-Cylinder-G129-Dex3-Joint` | Dex3 | `--enable_dex3_dds` |
+| `Isaac-PickPlace-RedBlock-G129-Dex3-Joint` | Dex3 | `--enable_dex3_dds` |
+| `Isaac-Stack-RgyBlock-G129-Dex3-Joint` | Dex3 | `--enable_dex3_dds` |
+| `Isaac-Move-Cylinder-G129-Dex3-Wholebody` | Dex3 | `--enable_dex3_dds` |
+
+Only one hand flag can be active at a time. `Joint` tasks fix the robot's base in place (good for arm/hand testing), while `Wholebody` tasks allow full locomotion. Use a `Wholebody` task when testing policies that move the legs. You can also register your own custom Isaac Lab tasks for deployment testing.
+
+### 5. Run your control script
+
+Terminal 2 (with the G1-Playground venv active):
+
+```bash
+source .venv/bin/activate
+python scripts/run_ankle_swing_demo.py --dds_channel_id 1
+```
+
+No network interface is needed since Isaac Lab communicates via shared memory on the same machine.
+
+<img src="resources/isaac_lab_g1_example.png" height="400px"/>
+
+### Common Isaac Lab problems
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `No LowState received within timeout` | DDS channel mismatch | Ensure `--dds_channel_id` is 1 (the default) to match the Isaac Lab simulator |
+| `libstdc++.so.6: version GLIBCXX_3.4.30 not found` | System libstdc++ too old for Isaac Sim | `sudo apt install libstdc++-12-dev` or update your distro's gcc/g++ package |
+| EULA prompt blocks startup | First-time Isaac Sim launch | Run `isaacsim` once manually and accept the EULA |
+| `Could not locate cyclonedds` | Missing CycloneDDS dev libs | `sudo apt install cyclonedds-dev` |
 
 ## Real robot deployment
 
@@ -212,10 +338,10 @@ If ping fails, the network isn't set up correctly. Fix that before going further
 ### Run
 
 ```bash
-python scripts/run_ankle_swing_demo.py enp2s0
+python scripts/run_ankle_swing_demo.py enp2s0 --dds_channel_id 0
 ```
 
-Replace `enp2s0` with your actual ethernet interface.
+The real robot uses DDS channel 0 by default. Replace `enp2s0` with your actual ethernet interface.
 
 What you should see:
 
@@ -271,4 +397,4 @@ MIT.
 
 ## Acknowledgements
 
-Built on top of [unitree_sdk2_python](https://github.com/unitreerobotics/unitree_sdk2_python) and [unitree_mujoco](https://github.com/unitreerobotics/unitree_mujoco). The architecture borrows the Init/Start lifecycle pattern from Unitree's C++ examples.
+Built on top of [unitree_sdk2_python](https://github.com/unitreerobotics/unitree_sdk2_python), [unitree_mujoco](https://github.com/unitreerobotics/unitree_mujoco), and [unitree_sim_isaaclab](https://github.com/unitreerobotics/unitree_sim_isaaclab). The architecture borrows the Init/Start lifecycle pattern from Unitree's C++ examples.
