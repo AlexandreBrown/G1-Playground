@@ -9,7 +9,7 @@ from g1_playground.policies.ankle_swing import AnkleSwingPolicy
 
 def main():
     parser = argparse.ArgumentParser(description="Run the ankle swing demo policy on the G1 robot.")
-    parser.add_argument("network_interface", nargs="?", default=None,
+    parser.add_argument("--network_interface", default=None,
                         help="Network interface for real robot or MuJoCo sim (e.g. enp2s0, lo)")
     parser.add_argument("--dds_channel_id", type=int, default=1,
                         help="DDS domain channel ID (default: 1 for sim, use 0 for real robot)")

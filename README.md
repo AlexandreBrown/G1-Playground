@@ -147,10 +147,8 @@ source .venv/bin/activate
 
 Run your code : 
 ```bash
-python scripts/run_ankle_swing_demo.py lo --dds_channel_id 1
-```
-
-Where `lo` is the network interface (loopback for sim) and `--dds_channel_id 1` is the sim channel.   
+python scripts/run_ankle_swing_demo.py --network_interface lo --dds_channel_id 1
+```   
 You should see:
 
 1. Warning message and an Enter prompt.
@@ -281,7 +279,7 @@ source .venv/bin/activate
 python scripts/run_ankle_swing_demo.py --dds_channel_id 1
 ```
 
-No network interface is needed since Isaac Lab communicates via shared memory on the same machine.
+No `--network_interface` is needed since Isaac Lab communicates via shared memory on the same machine.
 
 <img src="resources/isaac_lab_g1_example.png" height="400px"/>
 
@@ -338,7 +336,7 @@ If ping fails, the network isn't set up correctly. Fix that before going further
 ### Run
 
 ```bash
-python scripts/run_ankle_swing_demo.py enp2s0 --dds_channel_id 0
+python scripts/run_ankle_swing_demo.py --network_interface enp2s0 --dds_channel_id 0
 ```
 
 The real robot uses DDS channel 0 by default. Replace `enp2s0` with your actual ethernet interface.
